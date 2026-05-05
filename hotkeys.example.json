@@ -1,0 +1,16 @@
+{
+    "hotkeys": [
+        {
+            "id": "example-001",
+            "keys": "/greet",
+            "label": "Greeting",
+            "content": "Hi {form:Name}! Thanks for reaching out. How can I help you today?"
+        },
+        {
+            "id": "example-002",
+            "keys": "/sig",
+            "label": "Email Signature",
+            "content": "Best regards,\n{store:MyName}\n{recall:MyName}"
+        }
+    ]
+}
