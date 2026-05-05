@@ -33,7 +33,7 @@ A lightning-fast, system-wide text expansion tool for Windows. Type a short trig
 
 ```bash
 # Clone the repo
-git clone https://github.com/marcdanielj/AV-Blaze.git
+git clone https://github.com/marc-av/AV-Blaze.git
 cd AV-Blaze
 
 # Create a virtual environment
