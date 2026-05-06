@@ -1,9 +1,10 @@
 import sys
+import os
 import re
 import time
 import datetime
-import keyboard
 import pyperclip
+from pynput import keyboard
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtCore import Qt
@@ -114,7 +115,14 @@ class TextExpanderApp:
         
         try:
             pyperclip.copy(text)
-            keyboard.send('ctrl+v')
+            
+            controller = keyboard.Controller()
+            modifier = keyboard.Key.cmd if sys.platform == 'darwin' else keyboard.Key.ctrl
+            
+            with controller.pressed(modifier):
+                controller.press('v')
+                controller.release('v')
+                
             time.sleep(0.2)
         except Exception as e:
             print(f"Paste error: {e}")

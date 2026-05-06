@@ -1,0 +1,84 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build with PyInstaller (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name "TextExpander-Windows" --add-data "TextBlazeWeb;TextBlazeWeb" app.py
+
+    - name: Build with PyInstaller (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name "TextExpander-macOS" --add-data "TextBlazeWeb:TextBlazeWeb" app.py
+        # PyInstaller creates a .app bundle for windowed mode on Mac. 
+        # We need to zip it for release.
+        cd dist
+        zip -r TextExpander-macOS.app.zip TextExpander-macOS.app
+
+    - name: Upload Windows Artifact
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: TextExpander-Windows
+        path: dist/TextExpander-Windows.exe
+
+    - name: Upload macOS Artifact
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v4
+      with:
+        name: TextExpander-macOS
+        path: dist/TextExpander-macOS.app.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: TextExpander-Windows
+        path: release/
+        
+    - name: Download macOS Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: TextExpander-macOS
+        path: release/
+
+    - name: Release to GitHub
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/TextExpander-Windows.exe
+          release/TextExpander-macOS.app.zip
+        generate_release_notes: true

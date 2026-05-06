@@ -1,7 +1,7 @@
-import keyboard
 import threading
 import time
 from PyQt6.QtCore import QObject, pyqtSignal
+from pynput import keyboard
 
 class HotkeyManager(QObject):
     # Emits (trigger, content)
@@ -12,15 +12,17 @@ class HotkeyManager(QObject):
         self._lock = threading.Lock()  # Protects registered_hotkeys + buffer
         self.registered_hotkeys = {}
         self.buffer = ""
-        self.hook_handle = None
+        self.listener = None
+        self.controller = keyboard.Controller()
         self._processing = False  # Guard against re-entrant backspace events
 
     def start(self, hotkey_list):
         """Register all snippets and start listening."""
         self.reload_hotkeys(hotkey_list)
         
-        if not self.hook_handle:
-            self.hook_handle = keyboard.on_press(self._on_key_press, suppress=False)
+        if not self.listener:
+            self.listener = keyboard.Listener(on_press=self._on_key_press)
+            self.listener.start()
 
     def reload_hotkeys(self, hotkey_list):
         """Thread-safe reload: pauses hook processing, swaps the dict, clears buffer."""
@@ -33,23 +35,27 @@ class HotkeyManager(QObject):
             self.registered_hotkeys = new_hotkeys
             self.buffer = ""  # Clear stale buffer to prevent phantom matches
 
-    def _on_key_press(self, event):
+    def _on_key_press(self, key):
         # Ignore events while we are sending simulated backspaces
         if self._processing:
             return
 
-        name = event.name
-        
-        if name == 'backspace':
-            char = '\b'
-        elif name == 'space':
-            char = ' '
-        elif name == 'enter':
-            char = '\n'
-        elif len(name) == 1:
-            char = name.lower()
-        else:
-            # Ignore modifier/control keys (shift, ctrl, alt, etc.)
+        char = None
+        try:
+            if hasattr(key, 'char') and key.char is not None:
+                char = key.char.lower()
+            elif key == keyboard.Key.backspace:
+                char = '\b'
+            elif key == keyboard.Key.space:
+                char = ' '
+            elif key == keyboard.Key.enter:
+                char = '\n'
+            else:
+                return # Ignore modifier keys
+        except AttributeError:
+            return
+            
+        if char is None:
             return
 
         with self._lock:
@@ -79,13 +85,14 @@ class HotkeyManager(QObject):
                 break
 
     def _handle_trigger(self, trigger, content):
-        """Run outside the hook callback to avoid blocking Windows hooks."""
+        """Run outside the hook callback to avoid blocking."""
         self._processing = True
         try:
             # Small pause to let the hook fully return first
             time.sleep(0.05)
             for _ in range(len(trigger)):
-                keyboard.send('backspace')
+                self.controller.press(keyboard.Key.backspace)
+                self.controller.release(keyboard.Key.backspace)
                 time.sleep(0.01)
         finally:
             self._processing = False
@@ -94,9 +101,9 @@ class HotkeyManager(QObject):
         self.trigger_detected.emit(trigger, content)
 
     def stop(self):
-        if self.hook_handle:
-            keyboard.unhook(self.hook_handle)
-            self.hook_handle = None
+        if self.listener:
+            self.listener.stop()
+            self.listener = None
         with self._lock:
             self.registered_hotkeys.clear()
             self.buffer = ""
